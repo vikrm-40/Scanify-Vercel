@@ -1,0 +1,8 @@
+{
+  "name": "scanify",
+  "version": "2.0.0",
+  "description": "AI-powered text extraction from screenshots using Claude Vision",
+  "engines": { "node": ">=18" },
+  "scripts": { "dev": "vercel dev" },
+  "devDependencies": { "vercel": "^37.0.0" }
+}
