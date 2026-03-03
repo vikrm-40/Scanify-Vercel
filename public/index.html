@@ -3,669 +3,722 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Scanify — Video Text Extractor</title>
-<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<title>Scanify — AI Text Extraction</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ══════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Material 3 × SF geometry × Dynamic accent
+══════════════════════════════════════════════════════════════════ */
 :root {
-  --bg:      #080b0f;
-  --bg2:     #0d1117;
-  --surf:    #111820;
-  --surf2:   #161e2a;
-  --bord:    #1e2d3d;
-  --bord2:   #263547;
-  --cyan:    #00d4ff;
-  --green:   #00ff88;
-  --red:     #ff4455;
-  --amber:   #ff9f0a;
-  --text:    #e6edf3;
-  --text2:   #8b949e;
-  --text3:   #484f58;
-  --mono:    'Geist Mono', 'SF Mono', monospace;
-  --r:       6px;
-  --ease:    0.18s cubic-bezier(.4,0,.2,1);
+  --n900: #0b0e1a;
+  --s1:   #10141f;
+  --s2:   #141826;
+  --s3:   #1a1f30;
+  --s4:   #1f253a;
+  --bord: #ffffff0d;
+  --b2:   #ffffff18;
+
+  /* Dynamic accent — morphs to dominant image color */
+  --acc:      #00c2ff;
+  --acc-dim:  #00c2ff18;
+  --acc-mid:  #00c2ff40;
+  --acc-soft: #00c2ff0a;
+  --acc-on:   #0b0e1a;
+
+  --ok:   #00e096;
+  --warn: #ffb020;
+  --err:  #ff4d6a;
+  --text: #eceef5;
+  --t2:   #9ba3b4;
+  --t3:   #4a5368;
+
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', 'SF Mono', monospace;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease:   cubic-bezier(0.4, 0, 0.2, 1);
+  --dur:    220ms;
 }
 
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-html { font-size:14px; }
+html { font-size:15px; -webkit-font-smoothing:antialiased; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--mono);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
+  background:var(--n900);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow-x:hidden;
 }
 
-/* Dot grid background */
+/* Noise texture */
+body::after {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:999; opacity:.025;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Ambient glow */
 body::before {
-  content:'';
-  position:fixed; inset:0;
-  background-image:
-    linear-gradient(var(--bord) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bord) 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity:.2;
-  pointer-events:none;
+  content:''; position:fixed; pointer-events:none; z-index:0;
+  width:700px; height:700px; top:-250px; right:-200px;
+  background:radial-gradient(circle, var(--acc-dim) 0%, transparent 70%);
+  transition:background 1.4s var(--ease);
 }
 
-/* ── NAV ─────────────────────────────────────────── */
+/* Global accent transition class */
+.acc-transition, .acc-transition * {
+  transition:
+    background-color .9s var(--ease),
+    border-color .9s var(--ease),
+    box-shadow .9s var(--ease),
+    color .35s var(--ease) !important;
+}
+
+/* ── NAV ── */
 .nav {
-  height:52px;
+  position:sticky; top:0; z-index:100; flex-shrink:0;
   display:flex; align-items:center; justify-content:space-between;
-  padding:0 24px;
+  padding:10px 22px;
+  background:rgba(11,14,26,.88);
+  backdrop-filter:blur(20px) saturate(1.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
   border-bottom:1px solid var(--bord);
-  background:rgba(8,11,15,.95);
-  backdrop-filter:blur(12px);
-  position:sticky; top:0; z-index:100;
-  flex-shrink:0;
 }
 
 .nav-logo { display:flex; align-items:center; gap:10px; }
-.nav-mark {
-  width:26px; height:26px;
-  background:var(--cyan);
-  display:grid; place-items:center;
-  clip-path:polygon(0 0,100% 0,100% 70%,70% 100%,0 100%);
+
+.nav-icon {
+  width:34px; height:34px; border-radius:10px;
+  background:var(--acc); display:grid; place-items:center;
+  box-shadow:0 0 0 1px var(--acc-mid), 0 4px 16px var(--acc-dim);
+  transition:background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  flex-shrink:0;
 }
-.nav-mark svg { width:14px; height:14px; }
-.nav-name { font-size:.92rem; font-weight:600; letter-spacing:-.02em; }
-.nav-name em { font-style:normal; color:var(--cyan); }
-.nav-badge {
-  font-size:.58rem; letter-spacing:.18em; text-transform:uppercase;
-  color:var(--text3); border:1px solid var(--bord2);
-  padding:2px 7px; border-radius:2px;
+.nav-icon svg { width:16px; height:16px; color:var(--acc-on); }
+
+.nav-word { font-size:1.05rem; font-weight:600; letter-spacing:-.025em; }
+.nav-word em { font-style:normal; color:var(--acc); transition:color var(--dur) var(--ease); }
+.nav-chip {
+  font-size:.6rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--t3); background:var(--s3); border:1px solid var(--b2);
+  padding:3px 8px; border-radius:20px;
 }
 
-.nav-right { display:flex; align-items:center; gap:12px; }
+.nav-right { display:flex; align-items:center; gap:8px; }
+
+.status-pill {
+  display:flex; align-items:center; gap:6px;
+  background:var(--s3); border:1px solid var(--b2);
+  padding:5px 11px 5px 9px; border-radius:20px;
+  font-size:.73rem; font-weight:500; color:var(--t2);
+}
+.s-pip {
+  width:6px; height:6px; border-radius:50%; background:var(--t3);
+  transition:all .3s; flex-shrink:0;
+}
+.status-pill.ready   .s-pip { background:var(--ok);  box-shadow:0 0 7px var(--ok); }
+.status-pill.working .s-pip { background:var(--acc); box-shadow:0 0 7px var(--acc); animation:pip 1s infinite; }
+.status-pill.error   .s-pip { background:var(--err); }
+@keyframes pip { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(.6)} }
 
 .hist-btn {
   display:flex; align-items:center; gap:6px;
-  background:transparent; border:1px solid var(--bord);
-  color:var(--text3); font-family:var(--mono);
-  font-size:.62rem; letter-spacing:.1em; text-transform:uppercase;
-  padding:5px 10px; border-radius:var(--r);
-  cursor:pointer; transition:all var(--ease);
+  background:var(--s3); border:1px solid var(--b2);
+  color:var(--t2); font-family:var(--sans);
+  font-size:.76rem; font-weight:500;
+  padding:7px 13px; border-radius:var(--r-md);
+  cursor:pointer; transition:all var(--dur) var(--ease);
 }
-.hist-btn:hover { border-color:var(--cyan); color:var(--cyan); }
-
-.hist-badge {
-  background:var(--cyan); color:var(--bg);
-  font-size:.52rem; font-weight:700;
-  padding:1px 5px; border-radius:10px;
-  display:none;
+.hist-btn:hover { background:var(--acc-dim); border-color:var(--acc-mid); color:var(--acc); }
+.h-count {
+  background:var(--acc); color:var(--acc-on);
+  font-size:.6rem; font-weight:700;
+  min-width:18px; height:18px; padding:0 5px;
+  border-radius:9px; display:none; align-items:center; justify-content:center;
 }
-.hist-badge.on { display:inline-block; }
+.h-count.on { display:flex; }
 
-.nav-status { display:flex; align-items:center; gap:6px; }
-.status-dot {
-  width:6px; height:6px; border-radius:50%;
-  background:var(--text3); transition:all .3s;
-}
-.status-dot.ready   { background:var(--green); box-shadow:0 0 6px var(--green); }
-.status-dot.working { background:var(--cyan); box-shadow:0 0 6px var(--cyan); animation:led-pulse 1s infinite; }
-.status-dot.error   { background:var(--red); }
-.status-lbl { font-size:.62rem; letter-spacing:.1em; color:var(--text3); }
-
-@keyframes led-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-/* ── WORKSPACE ───────────────────────────────────── */
+/* ── WORKSPACE ── */
 .workspace {
-  flex:1;
+  flex:1; position:relative; z-index:1;
   display:flex; flex-direction:column;
-  padding:20px 24px 28px;
-  gap:14px;
-  max-width:1100px;
-  width:100%;
-  margin:0 auto;
+  padding:20px 22px 32px; gap:16px;
+  max-width:1080px; width:100%; margin:0 auto;
 }
 
-/* ── UPLOAD CARD ─────────────────────────────────── */
+/* ── UPLOAD CARD ── */
 .upload-card {
-  background:var(--surf);
-  border:1.5px dashed var(--bord2);
-  border-radius:var(--r);
-  padding:28px 24px;
-  display:flex; flex-direction:column;
-  align-items:center; gap:16px;
+  background:var(--s1); border:1px solid var(--bord);
+  border-radius:var(--r-xl);
+  padding:32px 28px;
+  display:flex; flex-direction:column; align-items:center; gap:20px;
   position:relative; overflow:hidden;
-  transition:border-color .25s, background .25s;
 }
-
-/* animated sweep line */
 .upload-card::before {
-  content:'';
-  position:absolute; left:0; right:0; height:50px;
-  background:linear-gradient(180deg,transparent,#00d4ff07,transparent);
-  top:-50px;
-  animation:sweep 4s ease-in-out infinite;
-  pointer-events:none;
+  content:''; position:absolute; left:-10%; right:-10%; height:1px; top:0;
+  background:linear-gradient(90deg, transparent, var(--acc-mid), transparent);
+  animation:glow-line 5s ease-in-out infinite;
+  transition:background 1s var(--ease);
 }
-@keyframes sweep {
-  0%  { top:-50px; opacity:0; }
-  10% { opacity:1; }
-  90% { opacity:1; }
-  100%{ top:calc(100% + 50px); opacity:0; }
+@keyframes glow-line { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+.eyebrow {
+  font-size:.68rem; font-weight:500; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--acc); display:flex; align-items:center; gap:8px;
+  transition:color var(--dur) var(--ease);
+}
+.eyebrow::before, .eyebrow::after {
+  content:''; height:1px; width:44px;
+  background:linear-gradient(90deg, transparent, var(--acc-mid));
+  transition:background var(--dur) var(--ease);
+}
+.eyebrow::after { transform:scaleX(-1); }
+
+/* Segmented control */
+.seg {
+  display:flex; background:var(--s3); border:1px solid var(--b2);
+  border-radius:var(--r-md); padding:3px; gap:2px;
+  width:100%; max-width:390px;
+}
+.seg-btn {
+  flex:1; background:transparent; border:none;
+  color:var(--t3); font-family:var(--sans);
+  font-size:.78rem; font-weight:500;
+  padding:8px 4px; border-radius:var(--r-sm);
+  cursor:pointer; transition:all var(--dur) var(--ease);
+  display:flex; align-items:center; justify-content:center; gap:5px;
+}
+.seg-btn:hover:not(.on) { color:var(--text); background:var(--s4); }
+.seg-btn.on {
+  background:var(--acc); color:var(--acc-on);
+  font-weight:600; box-shadow:0 2px 8px var(--acc-dim);
 }
 
-/* ── MODE TABS ───────────────────────────────────── */
-.mode-tabs {
-  display:flex; border:1px solid var(--bord);
-  border-radius:var(--r); overflow:hidden;
-  width:100%; max-width:440px;
-}
-.mode-tab {
-  flex:1; background:transparent;
-  border:none; border-right:1px solid var(--bord);
-  color:var(--text3); font-family:var(--mono);
-  font-size:.62rem; letter-spacing:.1em; text-transform:uppercase;
-  padding:9px 4px; cursor:pointer; transition:all var(--ease);
-}
-.mode-tab:last-child { border-right:none; }
-.mode-tab.on { background:var(--cyan); color:var(--bg); font-weight:600; }
-.mode-tab:hover:not(.on) { color:var(--text2); background:var(--surf2); }
-
-/* ── PANELS ──────────────────────────────────────── */
-.panel { display:none; width:100%; max-width:440px; flex-direction:column; gap:10px; }
+/* Panels */
+.panel { display:none; width:100%; max-width:390px; flex-direction:column; gap:10px; }
 .panel.on { display:flex; }
 
-/* PANEL A — textarea */
-.paste-box {
-  width:100%; min-height:108px;
-  background:var(--surf2); border:1.5px solid var(--bord);
-  border-radius:var(--r); color:var(--text);
-  font-family:var(--mono); font-size:.75rem; line-height:1.7;
-  padding:12px 14px; resize:vertical; outline:none;
-  transition:border-color var(--ease); caret-color:var(--cyan);
+.paste-area {
+  width:100%; min-height:116px;
+  background:var(--s3); border:1.5px solid var(--b2);
+  border-radius:var(--r-md); color:var(--text);
+  font-family:var(--mono); font-size:.8rem; line-height:1.7;
+  padding:13px 15px; resize:vertical; outline:none;
+  transition:border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  caret-color:var(--acc);
   -webkit-user-select:auto; user-select:auto;
 }
-.paste-box:focus { border-color:var(--cyan); box-shadow:0 0 0 2px #00d4ff15; }
-.paste-box::placeholder { color:var(--text3); font-size:.65rem; line-height:1.9; }
+.paste-area:focus { border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-dim); }
+.paste-area::placeholder { color:var(--t3); font-size:.73rem; line-height:1.9; }
 
-.paste-hint {
-  font-size:.6rem; color:var(--text3);
-  letter-spacing:.06em; line-height:1.7; text-align:center;
+.hint { font-size:.7rem; color:var(--t3); line-height:1.65; text-align:center; }
+.hint strong { color:var(--acc); font-weight:500; transition:color var(--dur) var(--ease); }
+
+.fill-btn {
+  width:100%; border:none; font-family:var(--sans);
+  font-size:.82rem; font-weight:600;
+  padding:13px; border-radius:var(--r-md);
+  cursor:pointer; display:none;
+  transition:all var(--dur) var(--spring);
 }
-.paste-hint strong { color:var(--cyan); font-weight:400; }
+.fill-btn.acc { background:var(--acc); color:var(--acc-on); box-shadow:0 2px 12px var(--acc-mid); }
+.fill-btn.acc:hover { transform:translateY(-1px); box-shadow:0 6px 22px var(--acc-mid); }
+.fill-btn.show { display:block; }
 
-.load-btn {
-  width:100%; background:var(--cyan); color:var(--bg);
-  border:none; font-family:var(--mono);
-  font-size:.72rem; font-weight:600;
-  letter-spacing:.12em; text-transform:uppercase;
-  padding:12px; border-radius:var(--r);
-  cursor:pointer; display:none; transition:all var(--ease);
-}
-.load-btn:hover { background:#33ddff; box-shadow:0 0 20px #00d4ff33; }
-.load-btn.show { display:block; }
-
-/* PANEL B — URL */
 .url-row { display:flex; gap:8px; }
-.url-in {
-  flex:1; background:var(--surf2); border:1.5px solid var(--bord);
-  border-radius:var(--r); color:var(--text);
-  font-family:var(--mono); font-size:.72rem;
-  padding:10px 12px; outline:none;
-  transition:border-color var(--ease); min-width:0;
+.m3-in {
+  flex:1; min-width:0;
+  background:var(--s3); border:1.5px solid var(--b2);
+  border-radius:var(--r-md); color:var(--text);
+  font-family:var(--sans); font-size:.8rem;
+  padding:11px 13px; outline:none;
+  transition:border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.url-in:focus { border-color:var(--cyan); }
-.url-in::placeholder { color:var(--text3); font-size:.63rem; }
-.url-go {
-  background:var(--cyan); color:var(--bg);
-  border:none; font-family:var(--mono);
-  font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
-  padding:10px 16px; border-radius:var(--r);
-  cursor:pointer; flex-shrink:0; transition:all var(--ease);
+.m3-in:focus { border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-dim); }
+.m3-in::placeholder { color:var(--t3); font-size:.75rem; }
+.sm-btn {
+  background:var(--acc); color:var(--acc-on);
+  border:none; font-family:var(--sans);
+  font-size:.78rem; font-weight:600;
+  padding:11px 18px; border-radius:var(--r-md);
+  cursor:pointer; flex-shrink:0;
+  transition:all var(--dur) var(--spring);
 }
-.url-go:hover { background:#33ddff; }
-.url-go:disabled { background:var(--bord2); color:var(--text3); cursor:not-allowed; }
-.url-note {
-  font-size:.59rem; color:var(--text3);
-  letter-spacing:.05em; line-height:1.7; text-align:center;
-}
-.url-note a { color:var(--cyan); text-decoration:none; }
-.url-note a:hover { text-decoration:underline; }
+.sm-btn:hover { transform:translateY(-1px); box-shadow:0 4px 16px var(--acc-mid); }
+.sm-btn:disabled { background:var(--s4); color:var(--t3); cursor:not-allowed; transform:none; box-shadow:none; }
 
-/* PANEL C — file */
+.url-hint { font-size:.68rem; color:var(--t3); line-height:1.65; text-align:center; }
+.url-hint a { color:var(--acc); text-decoration:none; transition:color var(--dur) var(--ease); }
+
 .drop-zone {
-  width:100%; border:2px dashed var(--bord2);
-  border-radius:var(--r); padding:30px 16px; text-align:center;
-  position:relative; cursor:pointer; transition:all .2s;
+  width:100%; border:2px dashed var(--b2); border-radius:var(--r-lg);
+  padding:32px 16px; text-align:center; position:relative; cursor:pointer;
+  background:var(--s2); transition:all .22s var(--ease);
 }
-.drop-zone:hover,.drop-zone.over { border-color:var(--cyan); background:#00d4ff06; }
-.drop-zone input[type=file] {
-  position:absolute; inset:0; width:100%; height:100%;
-  opacity:0; cursor:pointer;
+.drop-zone:hover, .drop-zone.over {
+  border-color:var(--acc); background:var(--acc-soft); transform:scale(1.01);
 }
-.drop-zone-ico  { font-size:1.8rem; margin-bottom:7px; }
-.drop-zone-ttl  { font-size:.78rem; color:var(--text); font-weight:600; margin-bottom:4px; }
-.drop-zone-sub  { font-size:.62rem; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; }
-
-.mobile-warn {
-  font-size:.62rem; color:var(--amber);
-  letter-spacing:.05em; line-height:1.6; text-align:center;
-  padding:8px 12px;
-  background:#ff9f0a0d; border:1px solid #ff9f0a33; border-radius:var(--r);
+.drop-zone input[type=file] { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.drop-ico { font-size:2rem; margin-bottom:8px; }
+.drop-ttl { font-size:.88rem; font-weight:600; color:var(--text); margin-bottom:4px; }
+.drop-sub { font-size:.7rem; color:var(--t3); letter-spacing:.06em; text-transform:uppercase; }
+.mob-note {
+  font-size:.7rem; color:var(--warn); line-height:1.6; text-align:center;
+  padding:10px 14px; background:#ffb02010; border:1px solid #ffb02030; border-radius:var(--r-sm);
 }
 
-/* ── RESULT VIEW ─────────────────────────────────── */
+/* ── RESULT VIEW ── */
 .result-view { display:none; flex-direction:column; gap:14px; }
 .result-view.on { display:flex; }
 
-@media(min-width:720px) {
+@media(min-width:740px) {
   .result-view.on { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .result-toolbar { grid-column:1/-1; }
+  .result-bar { grid-column:1/-1; }
 }
 
-/* toolbar */
-.result-toolbar {
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-}
-.toolbar-left { display:flex; align-items:center; gap:8px; flex:1; flex-wrap:wrap; }
+.result-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bar-l { display:flex; align-items:center; gap:8px; flex:1; flex-wrap:wrap; }
 
-.r-btn {
-  background:transparent; border:1px solid var(--bord);
-  color:var(--text3); font-family:var(--mono);
-  font-size:.62rem; letter-spacing:.1em; text-transform:uppercase;
-  padding:6px 12px; border-radius:var(--r);
-  cursor:pointer; transition:all var(--ease);
-  white-space:nowrap;
+.pill {
+  display:inline-flex; align-items:center; gap:5px;
+  background:var(--s3); border:1px solid var(--b2);
+  color:var(--t2); font-family:var(--sans);
+  font-size:.75rem; font-weight:500;
+  padding:7px 13px; border-radius:20px;
+  cursor:pointer; transition:all var(--dur) var(--ease); white-space:nowrap;
 }
-.r-btn:hover { border-color:var(--cyan); color:var(--cyan); }
-.r-btn:disabled { opacity:.4; cursor:not-allowed; }
-.r-btn:disabled:hover { border-color:var(--bord); color:var(--text3); }
-.r-btn.prim { background:var(--cyan); border-color:var(--cyan); color:var(--bg); font-weight:600; }
-.r-btn.prim:hover { background:#33ddff; box-shadow:0 0 16px #00d4ff33; }
-.r-btn.prim:disabled { background:var(--bord2); border-color:var(--bord2); color:var(--text3); }
-.r-btn.danger:hover { border-color:var(--red); color:var(--red); }
+.pill:hover { border-color:var(--acc-mid); color:var(--acc); background:var(--acc-dim); }
+.pill:disabled { opacity:.35; cursor:not-allowed; pointer-events:none; }
+.pill.acc { background:var(--acc); border-color:var(--acc); color:var(--acc-on); font-weight:600; }
+.pill.acc:hover { box-shadow:0 4px 18px var(--acc-mid); transform:translateY(-1px); }
+.pill.acc:disabled { background:var(--s4); border-color:var(--s4); color:var(--t3); transform:none; box-shadow:none; }
+.pill.danger:hover { border-color:var(--err); color:var(--err); background:#ff4d6a12; }
 
-.heatmap-pill {
+.heat-badge {
   display:none; align-items:center; gap:5px;
-  font-size:.58rem; color:var(--text3); letter-spacing:.08em; text-transform:uppercase;
+  font-size:.7rem; font-weight:500; color:var(--warn);
+  background:#ffb02012; border:1px solid #ffb02030; padding:5px 10px; border-radius:20px;
 }
-.heatmap-pill.on { display:flex; }
-.heatmap-swatch {
-  width:9px; height:9px;
-  background:rgba(255,159,10,.5);
-  border:1px solid var(--amber); border-radius:2px;
-}
+.heat-badge.on { display:flex; }
+.heat-dot { width:7px; height:7px; border-radius:50%; background:var(--warn); }
 
-/* image pane */
-.img-pane {
-  background:var(--surf); border:1px solid var(--bord);
-  border-radius:var(--r); display:flex; flex-direction:column; overflow:hidden;
+/* Surface cards */
+.surf {
+  background:var(--s1); border:1px solid var(--bord);
+  border-radius:var(--r-lg); overflow:hidden; display:flex; flex-direction:column;
 }
-.pane-head {
+.card-head {
   display:flex; align-items:center; justify-content:space-between;
-  padding:8px 14px; border-bottom:1px solid var(--bord); background:var(--surf2);
+  padding:10px 16px; border-bottom:1px solid var(--bord); background:var(--s2);
 }
-.pane-title {
-  font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:var(--cyan);
-  display:flex; align-items:center; gap:7px;
+.c-label {
+  font-size:.66rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--acc); display:flex; align-items:center; gap:6px;
+  transition:color var(--dur) var(--ease);
 }
-.pane-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
+.c-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
 
 .img-wrap {
   position:relative; flex:1; min-height:200px;
   display:flex; align-items:center; justify-content:center;
-  overflow:hidden; background:var(--bg);
+  overflow:hidden; background:#080a14; cursor:zoom-in;
 }
 .img-wrap img {
-  max-width:100%; max-height:320px;
-  object-fit:contain; display:block;
-  transition:transform .3s ease;
+  max-width:100%; max-height:320px; object-fit:contain; display:block;
+  transition:transform .4s var(--ease);
 }
-@media(hover:hover) {
-  .img-wrap:hover img { transform:scale(1.5); }
-}
+@media(hover:hover) { .img-wrap:hover img { transform:scale(1.6); } }
 
-.scan-overlay { position:absolute; inset:0; pointer-events:none; display:none; }
-.scan-overlay.on { display:block; }
-.scan-line {
-  position:absolute; left:0; right:0; height:3px;
-  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
-  box-shadow:0 0 16px var(--cyan);
-  top:-3px; animation:scanmove 1.8s ease-in-out infinite;
+.scan-frame { position:absolute; inset:0; pointer-events:none; display:none; }
+.scan-frame.on { display:block; }
+.scan-beam {
+  position:absolute; left:0; right:0; height:2px; top:-2px;
+  background:linear-gradient(90deg, transparent 0%, var(--acc) 30%, #fff 50%, var(--acc) 70%, transparent 100%);
+  box-shadow:0 0 22px var(--acc), 0 0 6px #fff;
+  animation:beam 1.8s ease-in-out infinite;
+  transition:background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.scan-grid {
+.scan-tint {
   position:absolute; inset:0;
-  background-image:linear-gradient(0deg, #00d4ff08 1px, transparent 1px);
-  background-size:100% 24px;
-  opacity:0; animation:gridfade 1.8s ease-in-out infinite;
+  background:linear-gradient(180deg, var(--acc-soft) 0%, transparent 40%, transparent 60%, var(--acc-soft) 100%);
+  opacity:0; animation:tintpulse 1.8s ease-in-out infinite;
+  transition:background var(--dur) var(--ease);
 }
-@keyframes scanmove {
-  0%  { top:-3px; opacity:0; } 5% { opacity:1; } 95% { opacity:1; } 100%{ top:100%; opacity:0; }
-}
-@keyframes gridfade { 0%,100%{ opacity:0; } 50%{ opacity:1; } }
+@keyframes beam { 0%{top:-2px;opacity:0} 5%{opacity:1} 95%{opacity:1} 100%{top:100%;opacity:0} }
+@keyframes tintpulse { 0%,100%{opacity:0} 50%{opacity:.6} }
 
 .img-fname {
-  font-size:.6rem; color:var(--text3);
-  padding:6px 14px; letter-spacing:.04em;
-  border-top:1px solid var(--bord);
+  font-size:.64rem; color:var(--t3); font-family:var(--mono);
+  padding:7px 16px; border-top:1px solid var(--bord);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
-/* editor pane */
-.ed-pane {
-  background:var(--surf); border:1px solid var(--bord);
-  border-radius:var(--r); display:flex; flex-direction:column;
-  min-height:240px; overflow:hidden;
+.ed-wrap { display:flex; flex:1; position:relative; overflow:auto; min-height:200px; }
+.line-col {
+  padding:12px 12px 12px 16px;
+  color:var(--t3); font-size:.7rem; font-family:var(--mono);
+  line-height:1.75; text-align:right; border-right:1px solid var(--bord);
+  background:var(--s2); flex-shrink:0; min-width:38px; user-select:none;
 }
-.ed-actions { display:flex; gap:6px; align-items:center; }
-
-.ed-body { display:flex; flex:1; position:relative; overflow:auto; font-size:.8rem; line-height:1.75; }
-.line-nums {
-  padding:12px 10px 12px 14px;
-  color:var(--text3); font-size:.7rem; line-height:1.75;
-  text-align:right; border-right:1px solid var(--bord);
-  background:var(--surf2); flex-shrink:0;
-  min-width:36px; user-select:none;
-}
-.line-num { display:block; }
-.ed-content {
-  padding:12px 16px;
+.line-n { display:block; }
+.ed-text {
+  padding:12px 18px; font-family:var(--mono);
+  font-size:.8rem; line-height:1.75;
   white-space:pre-wrap; word-break:break-word;
-  color:var(--text); flex:1; letter-spacing:.01em;
+  color:var(--text); flex:1; letter-spacing:.005em;
 }
-.ed-placeholder {
-  position:absolute; inset:0;
+.ed-empty {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:10px; pointer-events:none; color:var(--t3);
+}
+.ed-empty svg { width:42px; height:42px; opacity:.3; }
+.ed-empty p { font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; line-height:1.6; text-align:center; }
+.ed-foot {
+  display:flex; gap:14px; padding:6px 16px;
+  border-top:1px solid var(--bord); background:var(--s2);
+  font-size:.62rem; font-family:var(--mono); color:var(--t3);
+  letter-spacing:.06em; text-transform:uppercase; flex-wrap:wrap;
+}
+.ed-stat span { color:var(--acc); transition:color var(--dur) var(--ease); }
+
+.t-head { color:#82b4ff; font-weight:600; }
+.t-lbl  { color:var(--warn); }
+.t-num  { color:var(--ok); }
+.t-sym  { color:var(--acc); transition:color var(--dur) var(--ease); }
+.unc {
+  background:rgba(255,176,32,.16); border-bottom:1.5px solid rgba(255,176,32,.5);
+  color:#ffd166; border-radius:3px; padding:0 1px; cursor:help; position:relative;
+}
+.unc::after {
+  content:'low confidence'; position:absolute; bottom:calc(100% + 5px); left:50%;
+  transform:translateX(-50%) scale(.9);
+  background:#ffb020; color:#000; font-size:.58rem; font-weight:600;
+  letter-spacing:.06em; text-transform:uppercase;
+  padding:3px 8px; border-radius:6px; white-space:nowrap; pointer-events:none;
+  opacity:0; transition:all .15s var(--ease);
+}
+.unc:hover::after { opacity:1; transform:translateX(-50%) scale(1); }
+
+/* ══════════════════════════════════════════════════════════════════
+   HISTORY OVERLAY — full-screen bento grid
+══════════════════════════════════════════════════════════════════ */
+.hist-overlay {
+  position:fixed; inset:0; z-index:300;
+  background:rgba(11,14,26,.96);
+  backdrop-filter:blur(24px) saturate(1.4);
+  -webkit-backdrop-filter:blur(24px) saturate(1.4);
   display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  gap:10px; pointer-events:none; color:var(--text3);
+  opacity:0; pointer-events:none;
+  transition:opacity .3s var(--ease);
 }
-.ed-placeholder svg { width:40px; height:40px; color:var(--bord2); }
-.ed-placeholder p { font-size:.63rem; letter-spacing:.12em; text-transform:uppercase; text-align:center; line-height:1.6; }
+.hist-overlay.on { opacity:1; pointer-events:auto; }
 
-.ed-status {
-  display:flex; gap:16px; align-items:center;
-  padding:5px 14px; border-top:1px solid var(--bord);
-  background:var(--surf2);
-  font-size:.58rem; color:var(--text3); letter-spacing:.08em; text-transform:uppercase;
-  flex-wrap:wrap;
-}
-.ed-stat span { color:var(--cyan); }
-
-/* syntax tokens */
-.tok-head { color:#79c0ff; font-weight:600; }
-.tok-lbl  { color:var(--amber); }
-.tok-num  { color:var(--green); }
-.tok-sym  { color:var(--cyan); }
-.uncertain {
-  background:rgba(255,159,10,.18);
-  border-bottom:1px solid rgba(255,159,10,.5);
-  color:#ffcc66; border-radius:2px; padding:0 1px;
-  cursor:help; position:relative;
-}
-.uncertain:hover::after {
-  content:'Low confidence';
-  position:absolute; bottom:calc(100% + 4px); left:50%;
-  transform:translateX(-50%);
-  background:#ff9f0a; color:#000;
-  font-size:.54rem; letter-spacing:.1em; text-transform:uppercase;
-  padding:3px 7px; border-radius:3px;
-  white-space:nowrap; pointer-events:none; z-index:10;
-}
-
-/* ── HISTORY SIDEBAR ──────────────────────────────── */
-.backdrop {
-  position:fixed; inset:0;
-  background:rgba(0,0,0,.6); backdrop-filter:blur(3px);
-  z-index:199; opacity:0; pointer-events:none; transition:opacity .3s;
-}
-.backdrop.on { opacity:1; pointer-events:auto; }
-
-.sidebar {
-  position:fixed; top:0; left:0; bottom:0;
-  width:310px; max-width:88vw;
-  background:var(--bg2); border-right:1px solid var(--bord);
-  z-index:200; display:flex; flex-direction:column;
-  transform:translateX(-100%);
-  transition:transform .32s cubic-bezier(.4,0,.2,1);
-  box-shadow:4px 0 28px rgba(0,0,0,.5);
-}
-.sidebar.on { transform:translateX(0); }
-
-.sb-head {
+.hist-hd {
   display:flex; align-items:center; justify-content:space-between;
-  padding:14px 16px; border-bottom:1px solid var(--bord); flex-shrink:0;
+  padding:18px 24px; border-bottom:1px solid var(--bord); flex-shrink:0;
 }
-.sb-title { font-size:.68rem; letter-spacing:.15em; text-transform:uppercase; color:var(--cyan); }
-.sb-close {
-  background:transparent; border:1px solid var(--bord);
-  color:var(--text3); font-family:var(--mono);
-  font-size:.6rem; padding:3px 8px; border-radius:3px; cursor:pointer;
-  transition:all var(--ease);
+.hist-ttl {
+  font-size:1.1rem; font-weight:600; letter-spacing:-.02em;
+  color:var(--text); display:flex; align-items:center; gap:10px;
 }
-.sb-close:hover { border-color:var(--red); color:var(--red); }
+.hist-badge {
+  font-size:.64rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  background:var(--acc-dim); color:var(--acc); border:1px solid var(--acc-mid);
+  padding:3px 10px; border-radius:20px; transition:all var(--dur) var(--ease);
+}
+.hist-acts { display:flex; gap:8px; }
+.icon-btn {
+  width:36px; height:36px; border-radius:var(--r-md);
+  background:var(--s3); border:1px solid var(--b2);
+  color:var(--t2); cursor:pointer;
+  display:grid; place-items:center;
+  font-size:.8rem;
+  transition:all var(--dur) var(--ease);
+}
+.icon-btn:hover { background:var(--s4); color:var(--text); }
+.icon-btn.danger:hover { background:#ff4d6a18; border-color:var(--err); color:var(--err); }
 
-.sb-empty {
-  flex:1; display:flex; flex-direction:column;
+.hist-body {
+  flex:1; overflow-y:auto; padding:20px 24px;
+}
+.hist-body::-webkit-scrollbar { width:4px; }
+.hist-body::-webkit-scrollbar-thumb { background:var(--s4); border-radius:2px; }
+
+.hist-empty {
+  height:100%; display:flex; flex-direction:column;
   align-items:center; justify-content:center;
-  gap:10px; padding:32px 20px; text-align:center;
-  font-size:.62rem; color:var(--text3); letter-spacing:.1em; text-transform:uppercase; line-height:1.7;
+  gap:14px; text-align:center; color:var(--t3); padding:40px;
+}
+.hem-ico { font-size:3rem; opacity:.4; }
+.hem-ttl { font-size:1rem; font-weight:600; color:var(--t2); }
+.hem-sub  { font-size:.78rem; line-height:1.6; max-width:260px; }
+
+/* ── BENTO GRID ── */
+.bento {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));
+  gap:12px; align-items:start;
 }
 
-.sb-list {
-  flex:1; overflow-y:auto; padding:8px;
-  display:flex; flex-direction:column; gap:5px;
+.b-card {
+  background:var(--s2); border:1px solid var(--bord);
+  border-radius:var(--r-lg); overflow:hidden; cursor:pointer;
+  position:relative; display:flex; flex-direction:column;
+  transition:all var(--dur) var(--ease);
 }
-.sb-list::-webkit-scrollbar { width:3px; }
-.sb-list::-webkit-scrollbar-thumb { background:var(--bord2); border-radius:2px; }
+.b-card:hover {
+  border-color:var(--acc-mid);
+  transform:translateY(-3px);
+  box-shadow:0 10px 36px rgba(0,0,0,.45), 0 0 0 1px var(--acc-mid);
+}
+.b-card.active { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok); }
+.b-card.tall   { grid-row:span 2; }
+.b-card.wide   { grid-column:span 2; }
 
-.h-card {
-  display:flex; gap:9px; padding:9px;
-  background:var(--surf); border:1px solid var(--bord);
-  border-radius:var(--r); cursor:pointer;
-  transition:all var(--ease); position:relative;
-}
-.h-card:hover { border-color:var(--cyan); background:#00d4ff06; }
-.h-card.cur { border-color:var(--green); }
-.h-thumb { width:48px; height:34px; object-fit:cover; border-radius:3px; background:var(--bord); flex-shrink:0; }
-.h-meta { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.h-name { font-size:.66rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.h-prev { font-size:.58rem; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.h-time { font-size:.54rem; color:var(--text3); margin-top:auto; }
-.h-del {
-  position:absolute; top:5px; right:5px;
-  background:transparent; border:none; color:var(--text3);
-  cursor:pointer; font-size:.68rem; padding:2px 4px;
-  opacity:0; transition:all var(--ease); border-radius:2px;
-}
-.h-card:hover .h-del { opacity:1; }
-.h-del:hover { color:var(--red); background:#ff445511; }
+.b-img { position:relative; overflow:hidden; background:#080a14; flex-shrink:0; height:120px; }
+.b-card.tall .b-img { height:200px; }
 
-.sb-foot { padding:10px 12px; border-top:1px solid var(--bord); flex-shrink:0; }
-.sb-clear {
-  width:100%; background:transparent; border:1px solid var(--bord);
-  color:var(--text3); font-family:var(--mono);
-  font-size:.6rem; letter-spacing:.12em; text-transform:uppercase;
-  padding:7px; border-radius:var(--r); cursor:pointer; transition:all var(--ease);
-}
-.sb-clear:hover { border-color:var(--red); color:var(--red); }
+/* Per-card accent bar — uses the stored dominant color */
+.b-bar { position:absolute; top:0; left:0; right:0; height:3px; }
 
-/* ── TOAST ────────────────────────────────────────── */
-.toast {
-  position:fixed; bottom:22px; left:50%;
-  transform:translateX(-50%) translateY(60px);
-  background:var(--surf2); border:1px solid var(--bord2);
-  border-radius:var(--r); padding:9px 16px;
+.b-thumb {
+  width:100%; height:100%; object-fit:cover;
+  transition:transform .4s var(--ease);
+}
+.b-card:hover .b-thumb { transform:scale(1.06); }
+
+.b-fade {
+  position:absolute; inset:0;
+  background:linear-gradient(180deg, transparent 45%, rgba(11,14,26,.85) 100%);
+}
+
+.b-swatch {
+  position:absolute; bottom:8px; right:8px;
+  width:16px; height:16px; border-radius:50%;
+  border:2px solid rgba(255,255,255,.25);
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
+}
+
+.b-del {
+  position:absolute; top:7px; right:7px;
+  width:24px; height:24px; border-radius:8px; border:none;
+  background:rgba(11,14,26,.75); color:var(--t3); cursor:pointer;
+  font-size:.68rem; display:grid; place-items:center;
+  opacity:0; transition:all .15s;
+}
+.b-card:hover .b-del { opacity:1; }
+.b-del:hover { background:var(--err); color:#fff; }
+
+.b-body { padding:11px 13px; display:flex; flex-direction:column; gap:5px; flex:1; }
+.b-name {
+  font-size:.78rem; font-weight:600; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.b-prev {
+  font-size:.67rem; color:var(--t3); font-family:var(--mono);
+  line-height:1.5; display:-webkit-box;
+  -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.b-meta {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-top:auto; padding-top:6px;
+}
+.b-time { font-size:.6rem; color:var(--t3); }
+.b-tag {
+  font-size:.56rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  padding:2px 7px; border-radius:10px;
+}
+
+/* ── TOAST / SNACKBAR ── */
+.snack {
+  position:fixed; bottom:24px; left:50%;
+  transform:translateX(-50%) translateY(80px);
+  background:var(--s4); border:1px solid var(--b2);
+  border-radius:var(--r-md); padding:10px 18px;
   display:flex; align-items:center; gap:9px;
-  font-size:.7rem; letter-spacing:.05em;
-  box-shadow:0 8px 28px rgba(0,0,0,.5);
-  transition:transform .3s cubic-bezier(.4,0,.2,1), opacity .3s;
-  opacity:0; z-index:500; white-space:nowrap; pointer-events:none;
+  font-size:.78rem; font-weight:500;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  transition:transform .3s var(--spring), opacity .3s; opacity:0;
+  z-index:600; white-space:nowrap; pointer-events:none;
 }
-.toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
-.toast-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-.toast.info    .toast-dot { background:var(--cyan); animation:led-pulse 1s infinite; }
-.toast.success .toast-dot { background:var(--green); }
-.toast.error   .toast-dot { background:var(--red); }
-.toast.info    { border-color:var(--cyan); }
-.toast.success { border-color:var(--green); }
-.toast.error   { border-color:var(--red); }
+.snack.show { transform:translateX(-50%) translateY(0); opacity:1; }
+.snack-pip { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.snack.info    { border-color:var(--acc-mid); }
+.snack.info    .snack-pip { background:var(--acc); animation:pip 1s infinite; }
+.snack.success { border-color:#00e09640; }
+.snack.success .snack-pip { background:var(--ok); }
+.snack.error   { border-color:#ff4d6a40; }
+.snack.error   .snack-pip { background:var(--err); }
 
-/* paste flash on upload card */
-@keyframes flash-green {
-  0%   { border-color:var(--green); box-shadow:0 0 0 2px var(--green),inset 0 0 30px #00ff8814; }
-  100% { border-color:var(--bord2); box-shadow:none; }
+@keyframes card-flash {
+  0%  { box-shadow:0 0 0 3px var(--ok), inset 0 0 40px #00e09612; border-color:var(--ok); }
+  100%{ box-shadow:none; border-color:var(--bord); }
 }
-.paste-flash { animation:flash-green .7s ease-out forwards; }
+.paste-flash { animation:card-flash .8s var(--ease) forwards; }
 
-/* ── RESPONSIVE ───────────────────────────────────── */
 @media(max-width:600px) {
-  .nav { padding:0 14px; }
-  .workspace { padding:14px 14px 22px; }
-  .nav-badge { display:none; }
+  .nav { padding:8px 14px; }
+  .workspace { padding:14px 14px 24px; }
+  .upload-card { padding:22px 16px; border-radius:var(--r-lg); }
+  .nav-chip { display:none; }
+  .bento { grid-template-columns:repeat(2,1fr); }
+  .b-card.wide { grid-column:span 1; }
+  .hist-hd { padding:14px 16px; }
+  .hist-body { padding:14px 16px; }
 }
 </style>
 </head>
 <body>
 
-<!-- ── NAV ── -->
+<!-- NAV -->
 <nav class="nav">
   <div class="nav-logo">
-    <div class="nav-mark">
-      <svg viewBox="0 0 14 14" fill="none">
-        <rect x="1" y="1" width="12" height="9" rx="1" fill="#080b0f"/>
-        <rect x="3" y="3" width="4" height="1" rx=".3" fill="#00d4ff"/>
-        <rect x="3" y="5" width="6" height="1" rx=".3" fill="#00d4ff"/>
-        <rect x="3" y="7" width="3" height="1" rx=".3" fill="#00d4ff"/>
+    <div class="nav-icon">
+      <svg viewBox="0 0 16 16" fill="currentColor">
+        <rect x="1" y="1" width="14" height="10" rx="2" fill="rgba(0,0,0,.5)"/>
+        <rect x="3.5" y="3.5" width="5" height="1.2" rx=".4"/>
+        <rect x="3.5" y="5.8" width="7" height="1.2" rx=".4"/>
+        <rect x="3.5" y="8.1" width="4" height="1.2" rx=".4"/>
       </svg>
     </div>
-    <span class="nav-name">Scan<em>ify</em></span>
-    <span class="nav-badge">v2.0</span>
+    <span class="nav-word">Scan<em>ify</em></span>
+    <span class="nav-chip">v2</span>
   </div>
   <div class="nav-right">
-    <button class="hist-btn" onclick="toggleSidebar()">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-        <circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 1.5"/>
+    <button class="hist-btn" onclick="openHistory()">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <circle cx="6.5" cy="6.5" r="5"/><path d="M6.5 4v2.5l1.5 1.2"/>
       </svg>
       History
-      <span class="hist-badge" id="histBadge"></span>
+      <span class="h-count" id="histCount">0</span>
     </button>
-    <div class="nav-status">
-      <div class="status-dot" id="statusDot"></div>
-      <span class="status-lbl" id="statusLbl">Waiting</span>
+    <div class="status-pill" id="statusPill">
+      <span class="s-pip" id="sPip"></span>
+      <span id="statusLbl">Waiting</span>
     </div>
   </div>
 </nav>
 
-<!-- ── WORKSPACE ── -->
+<!-- WORKSPACE -->
 <div class="workspace">
 
   <!-- UPLOAD CARD -->
   <div class="upload-card" id="uploadCard">
+    <div class="eyebrow">Load an image to scan</div>
 
-    <div class="mode-tabs">
-      <button class="mode-tab on" id="tabA" onclick="setTab('A')">📋 Paste</button>
-      <button class="mode-tab"    id="tabB" onclick="setTab('B')">🔗 URL</button>
-      <button class="mode-tab"    id="tabC" onclick="setTab('C')">📁 File</button>
+    <div class="seg">
+      <button class="seg-btn on" id="tabA" onclick="setTab('A')">📋 Paste</button>
+      <button class="seg-btn"    id="tabB" onclick="setTab('B')">🔗 URL</button>
+      <button class="seg-btn"    id="tabC" onclick="setTab('C')">📁 File</button>
     </div>
 
-    <!-- PANEL A — textarea (works on all devices including Android WebView) -->
+    <!-- Panel A — textarea (Android-safe) -->
     <div class="panel on" id="panelA">
-      <textarea class="paste-box" id="pasteBox"
-        placeholder="Three ways to load an image:&#10;&#10;① Long-press here → tap Paste&#10;   (after copying an image in your gallery)&#10;&#10;② Type or paste a direct image URL&#10;   e.g. https://i.imgur.com/abc.jpg&#10;&#10;③ Paste a data:image/png;base64,... string"
+      <textarea class="paste-area" id="pasteBox"
+        placeholder="Three ways to load an image:&#10;&#10;① Long-press here → Paste  (copy image in Gallery first)&#10;&#10;② Paste or type a direct image URL&#10;   https://i.imgur.com/example.jpg&#10;&#10;③ Paste a data:image/... base64 string"
         oninput="onPasteInput()"
-        onpaste="onPasteEvent(event)">
-      </textarea>
-      <div class="paste-hint">
-        <strong>Android:</strong> copy image in Gallery → long-press this box → Paste<br>
-        Or paste / type any public image URL above
+        onpaste="onPasteEvent(event)"></textarea>
+      <div class="hint">
+        <strong>Android:</strong> copy image in Gallery → long-press box → Paste<br>Or type any public image URL
       </div>
-      <button class="load-btn" id="loadBtn" onclick="loadFromPasteBox()">↳ Load Image</button>
+      <button class="fill-btn acc" id="loadBtn" onclick="loadFromPasteBox()">Load Image</button>
     </div>
 
-    <!-- PANEL B — URL -->
+    <!-- Panel B — URL -->
     <div class="panel" id="panelB">
       <div class="url-row">
-        <input class="url-in" id="urlIn" type="url"
+        <input class="m3-in" id="urlIn" type="url"
                placeholder="https://i.imgur.com/example.jpg"
                onkeydown="if(event.key==='Enter') loadFromUrl()">
-        <button class="url-go" id="urlGo" onclick="loadFromUrl()">Load</button>
+        <button class="sm-btn" id="urlGo" onclick="loadFromUrl()">Load</button>
       </div>
-      <div class="url-note">
-        Free image hosts: <a href="https://imgur.com/upload" target="_blank">imgur.com</a> ·
+      <div class="url-hint">
+        Free hosts: <a href="https://imgur.com/upload" target="_blank">imgur.com</a> ·
         <a href="https://imgbb.com" target="_blank">imgbb.com</a><br>
-        Google Photos: tap photo → Share → <em>Create link</em> → paste the URL
+        Google Photos: Share → Create link
       </div>
     </div>
 
-    <!-- PANEL C — file drop -->
+    <!-- Panel C — file drop -->
     <div class="panel" id="panelC">
       <div class="drop-zone" id="dropZone"
            ondragover="event.preventDefault();this.classList.add('over')"
            ondragleave="this.classList.remove('over')"
            ondrop="this.classList.remove('over');onFileDrop(event)">
-        <div class="drop-zone-ico">🖼️</div>
-        <div class="drop-zone-ttl">Click or drag an image here</div>
-        <div class="drop-zone-sub">PNG · JPG · WEBP · GIF · BMP</div>
+        <div class="drop-ico">🖼️</div>
+        <div class="drop-ttl">Click or drag an image</div>
+        <div class="drop-sub">PNG · JPG · WEBP · GIF</div>
         <input type="file" id="fileIn" accept="image/*" onchange="onFileSelect(event)">
       </div>
-      <div class="mobile-warn">
+      <div class="mob-note">
         ⚠ File picker may be blocked in the Claude Android app.<br>
         Use <strong>Paste</strong> or <strong>URL</strong> tab on mobile.
       </div>
     </div>
-
   </div><!-- /upload-card -->
 
   <!-- RESULT VIEW -->
   <div class="result-view" id="resultView">
 
-    <!-- toolbar -->
-    <div class="result-toolbar">
-      <div class="toolbar-left">
-        <button class="r-btn prim" id="runBtn" onclick="runOCR()" disabled>▶ Run OCR</button>
-        <button class="r-btn" id="heatmapBtn" onclick="toggleHeatmap()" style="display:none">Heatmap</button>
-        <div class="heatmap-pill" id="heatmapPill">
-          <div class="heatmap-swatch"></div>
+    <div class="result-bar">
+      <div class="bar-l">
+        <button class="pill acc" id="runBtn" onclick="runOCR()" disabled>▶ Run OCR</button>
+        <button class="pill" id="heatBtn" onclick="toggleHeat()" style="display:none">🌡 Heatmap</button>
+        <div class="heat-badge" id="heatBadge">
+          <div class="heat-dot"></div>
           <span id="uncertainCt">0</span> uncertain
         </div>
       </div>
-      <button class="r-btn" onclick="copyResult()">Copy</button>
-      <button class="r-btn" onclick="downloadResult()">↓ Download</button>
-      <button class="r-btn danger" onclick="clearAll()">✕ Clear</button>
+      <button class="pill" onclick="copyResult()">Copy</button>
+      <button class="pill" onclick="downloadResult()">↓ Save</button>
+      <button class="pill danger" onclick="clearAll()">✕</button>
     </div>
 
-    <!-- image pane -->
-    <div class="img-pane">
-      <div class="pane-head">
-        <span class="pane-title"><span class="pane-dot"></span>Source Frame</span>
-        <button class="r-btn" onclick="changeImage()">Change</button>
+    <!-- Image pane -->
+    <div class="surf">
+      <div class="card-head">
+        <span class="c-label"><span class="c-dot"></span>Source Image</span>
+        <button class="pill" onclick="changeImage()" style="padding:4px 11px;font-size:.68rem">Change</button>
       </div>
       <div class="img-wrap">
         <img id="srcImg" src="" alt="">
-        <div class="scan-overlay" id="scanOverlay">
-          <div class="scan-grid"></div>
-          <div class="scan-line"></div>
+        <div class="scan-frame" id="scanFrame">
+          <div class="scan-tint"></div>
+          <div class="scan-beam"></div>
         </div>
       </div>
       <div class="img-fname" id="imgFname"></div>
     </div>
 
-    <!-- editor pane -->
-    <div class="ed-pane">
-      <div class="pane-head">
-        <span class="pane-title"><span class="pane-dot"></span>Extracted Text</span>
-        <div class="ed-actions">
-          <button class="r-btn" onclick="copyResult()">Copy</button>
-          <button class="r-btn" onclick="downloadResult()">↓</button>
+    <!-- Editor pane -->
+    <div class="surf">
+      <div class="card-head">
+        <span class="c-label"><span class="c-dot"></span>Extracted Text</span>
+        <div style="display:flex;gap:6px">
+          <button class="pill" onclick="copyResult()" style="padding:4px 11px;font-size:.68rem">Copy</button>
+          <button class="pill" onclick="downloadResult()" style="padding:4px 11px;font-size:.68rem">↓</button>
         </div>
       </div>
-      <div class="ed-body">
-        <div class="line-nums" id="lineNums"></div>
-        <div class="ed-content" id="edContent"></div>
-        <div class="ed-placeholder" id="edPlaceholder">
-          <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1">
-            <rect x="4" y="4" width="28" height="28" rx="3"/>
-            <path d="M10 13h16M10 19h12M10 25h8"/>
+      <div class="ed-wrap">
+        <div class="line-col" id="lineNums"></div>
+        <div class="ed-text" id="edContent"></div>
+        <div class="ed-empty" id="edEmpty">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="4" y="4" width="32" height="32" rx="4"/>
+            <path d="M11 15h18M11 21h14M11 27h9"/>
           </svg>
           <p>Run OCR to<br>extract text</p>
         </div>
       </div>
-      <div class="ed-status">
+      <div class="ed-foot">
         <span class="ed-stat">chars <span id="statChars">—</span></span>
         <span class="ed-stat">lines <span id="statLines">—</span></span>
         <span class="ed-stat">time  <span id="statTime">—</span></span>
@@ -673,531 +726,506 @@ body::before {
     </div>
 
   </div><!-- /result-view -->
-
 </div><!-- /workspace -->
 
-<!-- HISTORY SIDEBAR -->
-<div class="backdrop" id="backdrop" onclick="closeSidebar()"></div>
-<div class="sidebar" id="sidebar">
-  <div class="sb-head">
-    <span class="sb-title">⏱ Recent Scans</span>
-    <button class="sb-close" onclick="closeSidebar()">✕ Close</button>
+<!-- HISTORY OVERLAY — bento grid -->
+<div class="hist-overlay" id="histOverlay">
+  <div class="hist-hd">
+    <div class="hist-ttl">
+      Recent Scans
+      <span class="hist-badge" id="histBadge">0 scans</span>
+    </div>
+    <div class="hist-acts">
+      <button class="icon-btn danger" onclick="clearHistory()" title="Clear all">🗑</button>
+      <button class="icon-btn" onclick="closeHistory()" title="Close">✕</button>
+    </div>
   </div>
-  <div class="sb-empty" id="sbEmpty">No scans yet.<br>History appears here<br>automatically.</div>
-  <div class="sb-list"  id="sbList"  style="display:none"></div>
-  <div class="sb-foot">
-    <button class="sb-clear" onclick="clearHistory()">Clear all history</button>
+  <div class="hist-body">
+    <div class="hist-empty" id="histEmpty">
+      <div class="hem-ico">🔍</div>
+      <div class="hem-ttl">No scans yet</div>
+      <div class="hem-sub">Your scan history appears here as a visual gallery after your first scan</div>
+    </div>
+    <div class="bento" id="bentoGrid" style="display:none"></div>
   </div>
 </div>
 
-<!-- TOAST -->
-<div class="toast" id="toast">
-  <div class="toast-dot"></div>
-  <span id="toastMsg"></span>
+<!-- SNACKBAR -->
+<div class="snack" id="snackbar">
+  <div class="snack-pip"></div>
+  <span id="snackMsg"></span>
 </div>
+
+<!-- Hidden canvas for dominant color extraction -->
+<canvas id="colorCanvas" style="display:none" width="80" height="80"></canvas>
 
 <script>
-/* ══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════
    STATE
-══════════════════════════════════════════════════════════════════════════ */
-let imgB64 = null, imgType = null, imgName = '', lastText = '';
-let uncertainWords = [], heatmapOn = false;
-let startTime = 0, toastTimer = null, curHistId = null;
+══════════════════════════════════════════════════════════════════ */
+let imgB64=null, imgType=null, imgName='', lastText='';
+let uncertainWords=[], heatOn=false;
+let startTime=0, snackTimer=null, curHistId=null;
+let currentAccent=[0,194,255];
 
-/* ══════════════════════════════════════════════════════════════════════════
-   TAB SWITCHING
-══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   DYNAMIC COLOR THEMING
+   Extracts dominant hue from the loaded image via canvas,
+   then transitions all CSS accent variables smoothly
+══════════════════════════════════════════════════════════════════ */
+function extractDominantColor(imgEl) {
+  try {
+    const canvas = document.getElementById('colorCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, 80, 80);
+    const data = ctx.getImageData(0, 0, 80, 80).data;
+    const hues = new Float32Array(360);
+
+    for (let i=0; i<data.length; i+=4) {
+      const r=data[i]/255, g=data[i+1]/255, b=data[i+2]/255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      const sat = max===0 ? 0 : (max-min)/max;
+      const bri = max;
+      if (sat<0.22 || bri<0.15) continue;
+      let h=0;
+      if (max===r)      h=((g-b)/(max-min)+6)%6*60;
+      else if (max===g) h=((b-r)/(max-min)+2)*60;
+      else              h=((r-g)/(max-min)+4)*60;
+      hues[Math.round(h)%360] += sat*bri;
+    }
+
+    let best=0, bestScore=0;
+    for (let h=0; h<360; h++) {
+      let score=0;
+      for (let d=-18; d<=18; d++) score+=hues[(h+d+360)%360];
+      if (score>bestScore) { bestScore=score; best=h; }
+    }
+    if (bestScore<25) return null;
+
+    // HSL → RGB (vivid accent for dark theme)
+    const H=best, S=0.92, L=0.62;
+    const q=L<0.5 ? L*(1+S) : L+S-L*S, p=2*L-q;
+    const hk=H/360;
+    function hq(t) {
+      t=(t+1)%1;
+      if(t<1/6) return p+(q-p)*6*t;
+      if(t<1/2) return q;
+      if(t<2/3) return p+(q-p)*(2/3-t)*6;
+      return p;
+    }
+    return [Math.round(hq(hk+1/3)*255), Math.round(hq(hk)*255), Math.round(hq(hk-1/3)*255)];
+  } catch(e) { return null; }
+}
+
+function applyAccent(rgb, animate=true) {
+  const [r,g,b] = rgb;
+  currentAccent = [r,g,b];
+  const h = n => n.toString(16).padStart(2,'0');
+  const hex = `#${h(r)}${h(g)}${h(b)}`;
+  const lum = (0.299*r+0.587*g+0.114*b)/255;
+  const onAcc = lum>0.55 ? '#0b0e1a' : '#ffffff';
+
+  if (animate) {
+    document.documentElement.classList.add('acc-transition');
+    setTimeout(()=>document.documentElement.classList.remove('acc-transition'),1100);
+  }
+  const s = document.documentElement.style;
+  s.setProperty('--acc',      hex);
+  s.setProperty('--acc-dim',  hex+'18');
+  s.setProperty('--acc-mid',  hex+'40');
+  s.setProperty('--acc-soft', hex+'0a');
+  s.setProperty('--acc-on',   onAcc);
+}
+
+function sampleAndTheme(imgEl) {
+  if (!imgEl.complete || !imgEl.naturalWidth) {
+    imgEl.addEventListener('load', ()=>sampleAndTheme(imgEl), {once:true}); return;
+  }
+  const color = extractDominantColor(imgEl);
+  if (color) applyAccent(color, true);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════════════════════ */
 function setTab(t) {
-  ['A','B','C'].forEach(x => {
-    document.getElementById('tab'  + x).classList.toggle('on', x === t);
-    document.getElementById('panel'+ x).classList.toggle('on', x === t);
+  ['A','B','C'].forEach(x=>{
+    document.getElementById('tab'+x).classList.toggle('on',x===t);
+    document.getElementById('panel'+x).classList.toggle('on',x===t);
   });
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   PANEL A — TEXTAREA PASTE
-   Works on all devices. -webkit-user-select:auto enables long-press→Paste
-   on Android MIUI / Redmi WebViews.
-══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   PANEL A
+══════════════════════════════════════════════════════════════════ */
 function onPasteInput() {
-  const v = document.getElementById('pasteBox').value.trim();
-  const hasContent = v.startsWith('http') || v.startsWith('data:') || v.length > 80;
-  document.getElementById('loadBtn').classList.toggle('show', hasContent);
+  const v=document.getElementById('pasteBox').value.trim();
+  const has=v.startsWith('http')||v.startsWith('data:')||v.length>80;
+  document.getElementById('loadBtn').classList.toggle('show',has);
 }
-
 function onPasteEvent(e) {
-  // Check if clipboard contains an image (works on desktop + some Android)
-  const items = Array.from(e.clipboardData?.items || []);
-  const imgItem = items.find(i => i.type.startsWith('image/'));
-  if (imgItem) {
-    e.preventDefault();
-    const file = imgItem.getAsFile();
-    if (file) { toast('Image pasted — loading…', 'success'); loadFile(file, true); return; }
-  }
-  // Otherwise let text paste naturally (URL or base64) — load button appears via oninput
+  const item=Array.from(e.clipboardData?.items||[]).find(i=>i.type.startsWith('image/'));
+  if(item){e.preventDefault();const f=item.getAsFile();if(f){snack('Image pasted — loading…','success');loadFile(f,true);}}
 }
-
 function loadFromPasteBox() {
-  const v = document.getElementById('pasteBox').value.trim();
-  if (!v) { toast('Nothing to load', 'error'); return; }
-
-  if (v.startsWith('data:image')) { loadFromDataUri(v); return; }
-
-  // Raw base64
-  if (!v.startsWith('http') && v.length > 100 && /^[A-Za-z0-9+/=\s]+$/.test(v)) {
-    loadFromDataUri('data:image/jpeg;base64,' + v.replace(/\s/g, '')); return;
+  const v=document.getElementById('pasteBox').value.trim();
+  if(!v){snack('Nothing to load','error');return;}
+  if(v.startsWith('data:image')){loadFromDataUri(v);return;}
+  if(!v.startsWith('http')&&v.length>100&&/^[A-Za-z0-9+/=\s]+$/.test(v)){
+    loadFromDataUri('data:image/jpeg;base64,'+v.replace(/\s/g,''));return;
   }
-
-  // URL — load via panel B
-  if (v.startsWith('http')) {
-    document.getElementById('urlIn').value = v;
-    setTab('B');
-    loadFromUrl();
-    return;
-  }
-
-  toast('Paste an image, URL, or base64 string', 'error');
+  if(v.startsWith('http')){document.getElementById('urlIn').value=v;setTab('B');loadFromUrl();return;}
+  snack('Paste an image, URL, or base64 string','error');
 }
-
-function loadFromDataUri(dataUri) {
+function loadFromDataUri(uri) {
   try {
-    const mimeMatch = dataUri.match(/data:([^;]+);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-    const b64 = dataUri.split(',')[1];
-    if (!b64) throw new Error('Invalid data URI');
-    atob(b64.slice(0, 80)); // validate
-    imgB64 = b64; imgType = mime; imgName = 'pasted-image.png';
-    showResult(dataUri);
-    toast('Image loaded', 'success');
-  } catch(e) { toast('Invalid image data: ' + e.message, 'error'); }
+    const mime=(uri.match(/data:([^;]+);/)||[])[1]||'image/png';
+    const b64=uri.split(',')[1];
+    if(!b64)throw new Error('Invalid data URI');
+    atob(b64.slice(0,80));
+    imgB64=b64;imgType=mime;imgName='pasted-image.png';
+    showResult(uri);snack('Image loaded','success');
+  }catch(e){snack('Invalid image: '+e.message,'error');}
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   PANEL B — URL (via server-side CORS proxy on Vercel OR direct fetch)
-══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   PANEL B — URL
+══════════════════════════════════════════════════════════════════ */
 async function loadFromUrl() {
-  const url = document.getElementById('urlIn').value.trim();
-  if (!url) { toast('Enter an image URL first', 'error'); return; }
-
-  const btn = document.getElementById('urlGo');
-  btn.disabled = true; btn.textContent = '…';
-  toast('Fetching image…', 'info');
-
-  try {
+  const url=document.getElementById('urlIn').value.trim();
+  if(!url){snack('Enter an image URL','error');return;}
+  const btn=document.getElementById('urlGo');
+  btn.disabled=true;btn.textContent='…';snack('Fetching…','info');
+  try{
     let blob;
-
-    // 1. Try direct fetch first
-    try {
-      const r = await fetch(url, { mode: 'cors' });
-      if (r.ok) blob = await r.blob();
-    } catch(_) {}
-
-    // 2. CORS proxy fallback
-    if (!blob) {
-      const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
-      if (!r.ok) throw new Error('Could not fetch image (status ' + r.status + ')');
-      blob = await r.blob();
-    }
-
-    if (!blob.type.startsWith('image/')) throw new Error('URL did not return an image');
-
-    const name = url.split('/').pop().split('?')[0] || 'url-image.jpg';
-    loadFile(new File([blob], name, { type: blob.type }), false);
-  } catch(e) {
-    toast('Failed: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Load';
-  }
+    try{const r=await fetch(url,{mode:'cors'});if(r.ok)blob=await r.blob();}catch(_){}
+    if(!blob){const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url));if(!r.ok)throw new Error('Status '+r.status);blob=await r.blob();}
+    if(!blob.type.startsWith('image/'))throw new Error('Not an image');
+    loadFile(new File([blob],url.split('/').pop().split('?')[0]||'image.jpg',{type:blob.type}));
+  }catch(e){snack('Failed: '+e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='Load';}
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   PANEL C — FILE INPUT (desktop)
-══════════════════════════════════════════════════════════════════════════ */
-function onFileSelect(e) {
-  const f = e.target.files[0];
-  if (f) loadFile(f);
-  e.target.value = '';
-}
-function onFileDrop(e) {
-  e.preventDefault();
-  const f = e.dataTransfer.files[0];
-  if (f?.type.startsWith('image/')) loadFile(f);
-  else toast('Please drop an image file', 'error');
-}
+/* ══════════════════════════════════════════════════════════════════
+   PANEL C — FILE
+══════════════════════════════════════════════════════════════════ */
+function onFileSelect(e){const f=e.target.files[0];if(f)loadFile(f);e.target.value='';}
+function onFileDrop(e){e.preventDefault();const f=e.dataTransfer.files[0];if(f?.type.startsWith('image/'))loadFile(f);else snack('Drop an image file','error');}
 
-/* ══════════════════════════════════════════════════════════════════════════
-   CORE LOAD FILE
-══════════════════════════════════════════════════════════════════════════ */
-function loadFile(file, autoRun = false) {
-  imgName = file.name || 'image.png';
-  imgType = file.type || 'image/png';
-  curHistId = null;
-
-  const reader = new FileReader();
-  reader.onload = ev => {
-    imgB64 = ev.target.result.split(',')[1];
-    showResult(ev.target.result, autoRun);
-  };
+/* ══════════════════════════════════════════════════════════════════
+   CORE
+══════════════════════════════════════════════════════════════════ */
+function loadFile(file,autoRun=false){
+  imgName=file.name||'image.png';imgType=file.type||'image/png';curHistId=null;
+  const reader=new FileReader();
+  reader.onload=ev=>{imgB64=ev.target.result.split(',')[1];showResult(ev.target.result,autoRun);};
   reader.readAsDataURL(file);
 }
 
-function showResult(dataUrl, autoRun = false) {
-  document.getElementById('srcImg').src = dataUrl;
-  document.getElementById('imgFname').textContent = imgName;
-  document.getElementById('uploadCard').style.display = 'none';
+function showResult(dataUrl,autoRun=false){
+  const img=document.getElementById('srcImg');
+  img.src=dataUrl;
+  document.getElementById('imgFname').textContent=imgName;
+  document.getElementById('uploadCard').style.display='none';
   document.getElementById('resultView').classList.add('on');
-  document.getElementById('runBtn').disabled = false;
-  document.getElementById('pasteBox').value = '';
+  document.getElementById('runBtn').disabled=false;
+  document.getElementById('pasteBox').value='';
   document.getElementById('loadBtn').classList.remove('show');
   resetOutput();
-  setStatus('ready', 'Image loaded');
-
-  if (autoRun) setTimeout(runOCR, 300);
-  else toast('Image loaded — press Run OCR', 'info');
+  setStatus('ready','Image loaded');
+  sampleAndTheme(img);
+  if(autoRun)setTimeout(runOCR,320);
+  else snack('Image loaded — press Run OCR','info');
 }
 
-function changeImage() {
-  document.getElementById('uploadCard').style.display = '';
+function changeImage(){
+  document.getElementById('uploadCard').style.display='';
   document.getElementById('resultView').classList.remove('on');
-  setTab('A');
-  setStatus('', 'Waiting');
+  setTab('A');setStatus('','Waiting');
+  applyAccent([0,194,255],true);
 }
 
-function clearAll() {
-  imgB64 = null; imgType = null; imgName = ''; lastText = '';
-  uncertainWords = []; heatmapOn = false; curHistId = null;
-  document.getElementById('srcImg').src = '';
-  document.getElementById('uploadCard').style.display = '';
+function clearAll(){
+  imgB64=null;imgType=null;imgName='';lastText='';
+  uncertainWords=[];heatOn=false;curHistId=null;
+  document.getElementById('srcImg').src='';
+  document.getElementById('uploadCard').style.display='';
   document.getElementById('resultView').classList.remove('on');
-  document.getElementById('runBtn').disabled = true;
-  resetOutput();
-  setStatus('', 'Waiting');
+  document.getElementById('runBtn').disabled=true;
+  resetOutput();setStatus('','Waiting');
+  applyAccent([0,194,255],true);
 }
 
-function resetOutput() {
-  lastText = ''; uncertainWords = []; heatmapOn = false;
-  const safe = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
-  safe('edContent',     el => el.innerHTML = '');
-  safe('lineNums',      el => el.innerHTML = '');
-  safe('edPlaceholder', el => el.style.display = 'flex');
-  safe('statChars',     el => el.textContent = '—');
-  safe('statLines',     el => el.textContent = '—');
-  safe('statTime',      el => el.textContent = '—');
-  safe('heatmapBtn',    el => { el.style.display = 'none'; el.textContent = 'Heatmap'; });
-  safe('heatmapPill',   el => el.classList.remove('on'));
-  safe('uncertainCt',   el => el.textContent = '0');
+function resetOutput(){
+  lastText='';uncertainWords=[];heatOn=false;
+  const safe=(id,fn)=>{const el=document.getElementById(id);if(el)fn(el);};
+  safe('edContent',  el=>el.innerHTML='');
+  safe('lineNums',   el=>el.innerHTML='');
+  safe('edEmpty',    el=>el.style.display='flex');
+  safe('statChars',  el=>el.textContent='—');
+  safe('statLines',  el=>el.textContent='—');
+  safe('statTime',   el=>el.textContent='—');
+  safe('heatBtn',    el=>{el.style.display='none';el.textContent='🌡 Heatmap';});
+  safe('heatBadge',  el=>el.classList.remove('on'));
+  safe('uncertainCt',el=>el.textContent='0');
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   GLOBAL PASTE LISTENER (Ctrl+V / Cmd+V on desktop)
-══════════════════════════════════════════════════════════════════════════ */
-document.addEventListener('paste', e => {
-  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-  const items = Array.from(e.clipboardData?.items || []);
-  const imgItem = items.find(i => i.type.startsWith('image/'));
-  if (!imgItem) return;
+/* Global paste */
+document.addEventListener('paste',e=>{
+  if(['INPUT','TEXTAREA'].includes(e.target.tagName))return;
+  const item=Array.from(e.clipboardData?.items||[]).find(i=>i.type.startsWith('image/'));
+  if(!item)return;
   e.preventDefault();
-  const file = imgItem.getAsFile();
-  if (!file) return;
-  const card = document.getElementById('uploadCard');
-  if (card.style.display !== 'none') {
+  const f=item.getAsFile();if(!f)return;
+  const card=document.getElementById('uploadCard');
+  if(card.style.display!=='none'){
     card.classList.add('paste-flash');
-    card.addEventListener('animationend', () => card.classList.remove('paste-flash'), { once: true });
+    card.addEventListener('animationend',()=>card.classList.remove('paste-flash'),{once:true});
   }
-  toast('Image pasted — loading…', 'success');
-  loadFile(file, true);
+  snack('Image pasted — loading…','success');
+  loadFile(f,true);
 });
 
-/* ══════════════════════════════════════════════════════════════════════════
-   OCR — calls /api/ocr (Vercel serverless, key stays server-side)
-══════════════════════════════════════════════════════════════════════════ */
-async function runOCR() {
-  if (!imgB64) return;
-
-  document.getElementById('scanOverlay').classList.add('on');
-  document.getElementById('runBtn').disabled = true;
-  document.getElementById('runBtn').textContent = '⏳ Scanning…';
-  setStatus('working', 'Scanning…');
-  startTime = Date.now();
-  toast('Sending to Claude Vision…', 'info');
-
-  try {
-    const res = await fetch('/api/ocr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: imgB64, imageType: imgType })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'OCR request failed');
-
-    const text    = data.text || '(no text detected)';
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    lastText = text;
-
-    renderEditor(text, []);
-    document.getElementById('statChars').textContent = text.length;
-    document.getElementById('statLines').textContent = text.split('\n').filter(l => l.trim()).length;
-    document.getElementById('statTime').textContent  = elapsed + 's';
-    setStatus('ready', 'Done');
-    toast('Extracted in ' + elapsed + 's', 'success');
-
+/* ══════════════════════════════════════════════════════════════════
+   OCR
+══════════════════════════════════════════════════════════════════ */
+async function runOCR(){
+  if(!imgB64)return;
+  document.getElementById('scanFrame').classList.add('on');
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('runBtn').textContent='⏳ Scanning…';
+  setStatus('working','Scanning…');
+  startTime=Date.now();
+  snack('Sending to Claude Vision…','info');
+  try{
+    const res=await fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:imgB64,imageType:imgType})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'OCR failed');
+    const text=data.text||'(no text detected)';
+    const elapsed=((Date.now()-startTime)/1000).toFixed(1);
+    lastText=text;
+    renderEditor(text,[]);
+    document.getElementById('statChars').textContent=text.length;
+    document.getElementById('statLines').textContent=text.split('\n').filter(l=>l.trim()).length;
+    document.getElementById('statTime').textContent=elapsed+'s';
+    setStatus('ready','Done');
+    snack('Extracted in '+elapsed+'s','success');
     stopScan();
-    runHeatmap(text, elapsed);
-
-  } catch(e) {
-    setStatus('error', 'Error');
-    toast('Error: ' + e.message, 'error');
-    stopScan();
-  }
+    runHeatmap(text,elapsed);
+  }catch(e){setStatus('error','Error');snack('Error: '+e.message,'error');stopScan();}
+}
+function stopScan(){
+  document.getElementById('scanFrame').classList.remove('on');
+  document.getElementById('runBtn').disabled=false;
+  document.getElementById('runBtn').textContent='▶ Run OCR';
 }
 
-function stopScan() {
-  document.getElementById('scanOverlay').classList.remove('on');
-  document.getElementById('runBtn').disabled = false;
-  document.getElementById('runBtn').textContent = '▶ Run OCR';
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   HEATMAP — calls /api/heatmap
-══════════════════════════════════════════════════════════════════════════ */
-async function runHeatmap(text, elapsed) {
-  if (!text || text === '(no text detected)' || text.length < 10) {
-    saveHistory(elapsed); return;
-  }
-  try {
-    const res = await fetch('/api/heatmap', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: imgB64, imageType: imgType, ocrText: text })
-    });
-    const data = await res.json();
-    uncertainWords = data.uncertain || [];
-
-    if (uncertainWords.length > 0) {
-      renderEditor(lastText, uncertainWords);
-      document.getElementById('heatmapBtn').style.display = '';
-      document.getElementById('heatmapBtn').textContent = 'Heatmap On';
-      document.getElementById('heatmapPill').classList.add('on');
-      document.getElementById('uncertainCt').textContent = uncertainWords.length;
-      heatmapOn = true;
-      toast(uncertainWords.length + ' uncertain word(s) highlighted', 'info');
-    } else {
-      document.getElementById('heatmapBtn').style.display = '';
-      document.getElementById('heatmapBtn').textContent = 'Heatmap';
-      toast('High confidence — no uncertain words', 'success');
+/* ══════════════════════════════════════════════════════════════════
+   HEATMAP
+══════════════════════════════════════════════════════════════════ */
+async function runHeatmap(text,elapsed){
+  if(!text||text==='(no text detected)'||text.length<10){saveHistory(elapsed);return;}
+  try{
+    const res=await fetch('/api/heatmap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:imgB64,imageType:imgType,ocrText:text})});
+    const data=await res.json();
+    uncertainWords=data.uncertain||[];
+    if(uncertainWords.length>0){
+      renderEditor(lastText,uncertainWords);
+      document.getElementById('heatBtn').style.display='';
+      document.getElementById('heatBtn').textContent='🌡 Heatmap On';
+      document.getElementById('heatBadge').classList.add('on');
+      document.getElementById('uncertainCt').textContent=uncertainWords.length;
+      heatOn=true;
+      snack(uncertainWords.length+' uncertain word(s) highlighted','info');
+    }else{
+      document.getElementById('heatBtn').style.display='';
+      document.getElementById('heatBtn').textContent='🌡 Heatmap';
+      snack('High confidence result','success');
     }
-  } catch(_) {
-    toast('Heatmap skipped', 'info');
-  }
+  }catch(_){snack('Heatmap skipped','info');}
   saveHistory(elapsed);
 }
-
-function toggleHeatmap() {
-  heatmapOn = !heatmapOn;
-  document.getElementById('heatmapBtn').textContent = heatmapOn ? 'Heatmap On' : 'Heatmap Off';
-  renderEditor(lastText, heatmapOn ? uncertainWords : []);
+function toggleHeat(){
+  heatOn=!heatOn;
+  document.getElementById('heatBtn').textContent=heatOn?'🌡 Heatmap On':'🌡 Heatmap Off';
+  renderEditor(lastText,heatOn?uncertainWords:[]);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   EDITOR RENDERER + SYNTAX HIGHLIGHTING
-══════════════════════════════════════════════════════════════════════════ */
-function renderEditor(text, uncertain) {
-  const lines = text.split('\n');
-  document.getElementById('edPlaceholder').style.display = 'none';
-  document.getElementById('lineNums').innerHTML  = lines.map((_, i) => `<span class="line-num">${i+1}</span>`).join('');
-  document.getElementById('edContent').innerHTML = lines.map(l => styleLine(l, uncertain)).join('\n');
+/* ══════════════════════════════════════════════════════════════════
+   EDITOR
+══════════════════════════════════════════════════════════════════ */
+function renderEditor(text,unc){
+  const lines=text.split('\n');
+  document.getElementById('edEmpty').style.display='none';
+  document.getElementById('lineNums').innerHTML=lines.map((_,i)=>`<span class="line-n">${i+1}</span>`).join('');
+  document.getElementById('edContent').innerHTML=lines.map(l=>styleLine(l,unc)).join('\n');
 }
-
-function styleLine(line, uncertain) {
-  let s = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  if (/^[A-Z][A-Z\s\d'',.\-:!?]{6,}$/.test(line.trim()))
-    s = `<span class="tok-head">${s}</span>`;
-  else if (/^[A-Za-z][A-Za-z\s]{1,20}:\s/.test(line))
-    s = s.replace(/^([^:]+:)/, '<span class="tok-lbl">$1</span>');
-  else if (/^\s*[\d\s:.,\-\/|%$£€+]+\s*$/.test(line) && line.trim())
-    s = `<span class="tok-num">${s}</span>`;
-  else if (/^[-•·▸▶►→★#@]/.test(line.trim()))
-    s = `<span class="tok-sym">${s}</span>`;
-
-  for (const w of (uncertain || [])) {
-    if (!w || w.length < 2) continue;
-    try {
-      const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
-      s = s.replace(re, m => `<mark class="uncertain" title="Low confidence">${m}</mark>`);
-    } catch(_) {}
+function styleLine(line,unc){
+  let s=line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(/^[A-Z][A-Z\s\d'',.\-:!?]{6,}$/.test(line.trim()))s=`<span class="t-head">${s}</span>`;
+  else if(/^[A-Za-z][A-Za-z\s]{1,20}:\s/.test(line))s=s.replace(/^([^:]+:)/,'<span class="t-lbl">$1</span>');
+  else if(/^\s*[\d\s:.,\-\/|%$£€+]+\s*$/.test(line)&&line.trim())s=`<span class="t-num">${s}</span>`;
+  else if(/^[-•·▸▶►→★#@]/.test(line.trim()))s=`<span class="t-sym">${s}</span>`;
+  for(const w of(unc||[])){
+    if(!w||w.length<2)continue;
+    try{const re=new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');s=s.replace(re,m=>`<mark class="unc">${m}</mark>`);}catch(_){}
   }
   return s;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   COPY & DOWNLOAD
-══════════════════════════════════════════════════════════════════════════ */
-function copyResult() {
-  if (!lastText) { toast('Nothing to copy yet', 'error'); return; }
-  navigator.clipboard.writeText(lastText)
-    .then(() => toast('Copied to clipboard', 'success'))
-    .catch(() => toast('Copy failed — try selecting text manually', 'error'));
+/* ══════════════════════════════════════════════════════════════════
+   COPY / DOWNLOAD
+══════════════════════════════════════════════════════════════════ */
+function copyResult(){
+  if(!lastText){snack('Nothing to copy','error');return;}
+  navigator.clipboard.writeText(lastText).then(()=>snack('Copied!','success')).catch(()=>snack('Copy failed','error'));
 }
-function downloadResult() {
-  if (!lastText) { toast('Nothing to download yet', 'error'); return; }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([lastText], { type: 'text/plain' }));
-  a.download = (imgName.replace(/\.[^.]+$/, '') || 'scanify') + '-ocr.txt';
-  a.click(); URL.revokeObjectURL(a.href);
+function downloadResult(){
+  if(!lastText){snack('Nothing to download','error');return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lastText],{type:'text/plain'}));
+  a.download=(imgName.replace(/\.[^.]+$/,'')||'scanify')+'-ocr.txt';
+  a.click();URL.revokeObjectURL(a.href);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   HISTORY (localStorage)
-══════════════════════════════════════════════════════════════════════════ */
-const HKEY = 'scanify_history';
-function getHistory()  { try { return JSON.parse(localStorage.getItem(HKEY)||'[]'); } catch { return []; } }
-function putHistory(h) { try { localStorage.setItem(HKEY, JSON.stringify(h)); } catch {} }
+/* ══════════════════════════════════════════════════════════════════
+   HISTORY
+══════════════════════════════════════════════════════════════════ */
+const HKEY='scanify_history';
+const getH=()=>{try{return JSON.parse(localStorage.getItem(HKEY)||'[]');}catch{return[];}};
+const putH=h=>{try{localStorage.setItem(HKEY,JSON.stringify(h));}catch{}};
 
-function saveHistory(elapsed) {
-  const thumb = document.getElementById('srcImg').src;
-  const item  = {
-    id: Date.now().toString(36), ts: Date.now(),
-    name: imgName, thumb,
-    b64: imgB64, type: imgType,
-    text: lastText, uncertain: uncertainWords, elapsed
+function saveHistory(elapsed){
+  const [cr,cg,cb]=currentAccent;
+  const acc=`#${cr.toString(16).padStart(2,'0')}${cg.toString(16).padStart(2,'0')}${cb.toString(16).padStart(2,'0')}`;
+  const item={
+    id:Date.now().toString(36),ts:Date.now(),
+    name:imgName,thumb:document.getElementById('srcImg').src,
+    b64:imgB64,type:imgType,
+    text:lastText,uncertain:uncertainWords,elapsed,accent:acc
   };
-  let h = getHistory().filter(i =>
-    !(i.name === item.name && i.text.slice(0,40) === item.text.slice(0,40))
-  );
-  h.unshift(item);
-  if (h.length > 20) h = h.slice(0, 20);
-  putHistory(h);
-  curHistId = item.id;
-  updateBadge();
+  let h=getH().filter(i=>!(i.name===item.name&&i.text.slice(0,40)===item.text.slice(0,40)));
+  h.unshift(item);if(h.length>20)h=h.slice(0,20);
+  putH(h);curHistId=item.id;updateHistUI();
 }
 
-function updateBadge() {
-  const n = getHistory().length;
-  const b = document.getElementById('histBadge');
-  if (b) { b.textContent = n || ''; b.classList.toggle('on', n > 0); }
+function updateHistUI(){
+  const n=getH().length;
+  const c=document.getElementById('histCount');
+  if(c){c.textContent=n||'';c.classList.toggle('on',n>0);}
+  const b=document.getElementById('histBadge');
+  if(b)b.textContent=n+' scan'+(n===1?'':'s');
 }
 
-function renderSidebar() {
-  const h = getHistory();
-  document.getElementById('sbEmpty').style.display = h.length ? 'none' : 'flex';
-  const list = document.getElementById('sbList');
-  list.style.display = h.length ? 'flex' : 'none';
-  list.innerHTML = h.map(item => `
-    <div class="h-card ${item.id === curHistId ? 'cur' : ''}" onclick="restoreHistory('${item.id}')">
-      <img class="h-thumb" src="${item.thumb}" alt="" loading="lazy">
-      <div class="h-meta">
-        <div class="h-name">${esc(item.name)}</div>
-        <div class="h-prev">${esc(item.text.slice(0,70))}${item.text.length > 70 ? '…' : ''}</div>
-        <div class="h-time">${relTime(item.ts)}</div>
+/* ══════════════════════════════════════════════════════════════════
+   BENTO GRID
+══════════════════════════════════════════════════════════════════ */
+function openHistory(){renderBento();document.getElementById('histOverlay').classList.add('on');}
+function closeHistory(){document.getElementById('histOverlay').classList.remove('on');}
+
+function renderBento(){
+  const h=getH();
+  document.getElementById('histEmpty').style.display=h.length?'none':'flex';
+  const grid=document.getElementById('bentoGrid');
+  grid.style.display=h.length?'grid':'none';
+  if(!h.length)return;
+
+  grid.innerHTML=h.map((item,i)=>{
+    const tall=i===0||i===4||i===9;
+    const wide=i===2||i===6;
+    const cls='b-card'+(tall?' tall':'')+(wide?' wide':'')+(item.id===curHistId?' active':'');
+    const acc=item.accent||'#00c2ff';
+    const prev=item.text?(item.text.replace(/\n/g,' ').trim().slice(0,wide?110:70)):('(no text)');
+    const tag=item.elapsed?item.elapsed+'s':'scan';
+
+    return `<div class="${cls}" onclick="restoreItem('${item.id}')">
+      <div class="b-img">
+        <div class="b-bar" style="background:${acc}"></div>
+        <img class="b-thumb" src="${item.thumb}" alt="" loading="lazy">
+        <div class="b-fade"></div>
+        <div class="b-swatch" style="background:${acc}"></div>
+        <button class="b-del" onclick="delItem('${item.id}',event)">✕</button>
       </div>
-      <button class="h-del" onclick="delHistory('${item.id}',event)" title="Remove">✕</button>
-    </div>`).join('');
+      <div class="b-body">
+        <div class="b-name">${esc(item.name)}</div>
+        <div class="b-prev">${esc(prev)}${item.text&&item.text.length>prev.length?'…':''}</div>
+        <div class="b-meta">
+          <span class="b-time">${relTime(item.ts)}</span>
+          <span class="b-tag" style="background:${acc}18;color:${acc};border:1px solid ${acc}40">${tag}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function restoreHistory(id) {
-  const item = getHistory().find(i => i.id === id);
-  if (!item) return;
-  imgB64 = item.b64; imgType = item.type; imgName = item.name;
-  lastText = item.text; uncertainWords = item.uncertain || []; curHistId = id;
-
-  showResult(item.thumb, false);
-
-  if (item.text) {
-    renderEditor(item.text, item.uncertain || []);
-    const safe = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
-    safe('statChars',     el => el.textContent = item.text.length);
-    safe('statLines',     el => el.textContent = item.text.split('\n').filter(l => l.trim()).length);
-    safe('statTime',      el => el.textContent = item.elapsed ? item.elapsed + 's' : '—');
-    safe('edPlaceholder', el => el.style.display = 'none');
-
-    if (item.uncertain?.length) {
-      safe('heatmapBtn',  el => { el.style.display = ''; el.textContent = 'Heatmap On'; });
-      safe('heatmapPill', el => el.classList.add('on'));
-      safe('uncertainCt', el => el.textContent = item.uncertain.length);
-      heatmapOn = true;
+function restoreItem(id){
+  const item=getH().find(i=>i.id===id);
+  if(!item)return;
+  imgB64=item.b64;imgType=item.type;imgName=item.name;
+  lastText=item.text;uncertainWords=item.uncertain||[];curHistId=id;
+  showResult(item.thumb,false);
+  if(item.text){
+    renderEditor(item.text,item.uncertain||[]);
+    const safe=(id,fn)=>{const el=document.getElementById(id);if(el)fn(el);};
+    safe('statChars',  el=>el.textContent=item.text.length);
+    safe('statLines',  el=>el.textContent=item.text.split('\n').filter(l=>l.trim()).length);
+    safe('statTime',   el=>el.textContent=item.elapsed?item.elapsed+'s':'—');
+    safe('edEmpty',    el=>el.style.display='none');
+    if(item.uncertain?.length){
+      safe('heatBtn',    el=>{el.style.display='';el.textContent='🌡 Heatmap On';});
+      safe('heatBadge',  el=>el.classList.add('on'));
+      safe('uncertainCt',el=>el.textContent=item.uncertain.length);
+      heatOn=true;
     }
   }
-  renderSidebar(); closeSidebar();
-  toast('Restored from history', 'success');
+  if(item.accent){
+    const hex=item.accent.replace('#','');
+    applyAccent([parseInt(hex.slice(0,2),16),parseInt(hex.slice(2,4),16),parseInt(hex.slice(4,6),16)],true);
+  }
+  closeHistory();snack('Restored from history','success');
 }
 
-function delHistory(id, e) {
+function delItem(id,e){
   e.stopPropagation();
-  putHistory(getHistory().filter(i => i.id !== id));
-  if (curHistId === id) curHistId = null;
-  renderSidebar(); updateBadge();
+  putH(getH().filter(i=>i.id!==id));
+  if(curHistId===id)curHistId=null;
+  renderBento();updateHistUI();
 }
 
-function clearHistory() {
-  if (!confirm('Clear all scan history?')) return;
+function clearHistory(){
+  if(!confirm('Clear all scan history?'))return;
   localStorage.removeItem(HKEY);
-  curHistId = null;
-  renderSidebar(); updateBadge();
+  curHistId=null;renderBento();updateHistUI();
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   SIDEBAR
-══════════════════════════════════════════════════════════════════════════ */
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.contains('on') ? closeSidebar() : openSidebar();
-}
-function openSidebar() {
-  renderSidebar();
-  document.getElementById('sidebar').classList.add('on');
-  document.getElementById('backdrop').classList.add('on');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('on');
-  document.getElementById('backdrop').classList.remove('on');
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════
    UI HELPERS
-══════════════════════════════════════════════════════════════════════════ */
-function setStatus(type, lbl) {
-  const d = document.getElementById('statusDot');
-  const l = document.getElementById('statusLbl');
-  if (d) d.className = 'status-dot' + (type ? ' ' + type : '');
-  if (l) l.textContent = lbl;
+══════════════════════════════════════════════════════════════════ */
+function setStatus(type,lbl){
+  const p=document.getElementById('statusPill');
+  const t=document.getElementById('statusLbl');
+  if(p)p.className='status-pill'+(type?' '+type:'');
+  if(t)t.textContent=lbl;
+}
+function snack(msg,type='info'){
+  const el=document.getElementById('snackbar');
+  const m=document.getElementById('snackMsg');
+  if(!el||!m)return;
+  clearTimeout(snackTimer);
+  el.className='snack '+type;m.textContent=msg;
+  el.classList.remove('show');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('show')));
+  snackTimer=setTimeout(()=>el.classList.remove('show'),3800);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function relTime(ts){
+  const d=Date.now()-ts,m=Math.floor(d/60000),h2=Math.floor(d/3600000);
+  if(m<1)return 'Just now';if(m<60)return m+'m ago';if(h2<24)return h2+'h ago';
+  return Math.floor(d/86400000)+'d ago';
 }
 
-function toast(msg, type = 'info') {
-  const t = document.getElementById('toast');
-  const m = document.getElementById('toastMsg');
-  if (!t || !m) return;
-  clearTimeout(toastTimer);
-  t.className = 'toast ' + type;
-  m.textContent = msg;
-  t.classList.remove('show');
-  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3800);
-}
-
-function esc(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function relTime(ts) {
-  const d = Date.now() - ts;
-  const m = Math.floor(d / 60000), h = Math.floor(d / 3600000);
-  if (m < 1)  return 'Just now';
-  if (m < 60) return m + 'm ago';
-  if (h < 24) return h + 'h ago';
-  return Math.floor(d / 86400000) + 'd ago';
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   INIT
-══════════════════════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
-  setStatus('', 'Waiting');
-  updateBadge();
-});
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+document.addEventListener('DOMContentLoaded',()=>{setStatus('','Waiting');updateHistUI();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHistory();});
 </script>
 </body>
 </html>
